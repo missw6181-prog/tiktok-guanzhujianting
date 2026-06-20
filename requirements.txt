@@ -1,0 +1,2 @@
+TikTokLive>=6.6.5
+python-dotenv>=1.0.0
