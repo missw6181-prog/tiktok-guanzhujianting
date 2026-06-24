@@ -84,6 +84,19 @@ class Settings:
             ).split(",")
             if o.strip()
         ]
+        # all = API + 监控同进程；api = 仅 Web；worker = 仅监控 Worker
+        mode = os.getenv("FOLLOW_MONITOR_MODE", "all").strip().lower()
+        if mode not in {"all", "api", "worker"}:
+            mode = "all"
+        self.monitor_mode = mode
+
+    @property
+    def runs_api(self) -> bool:
+        return self.monitor_mode in {"all", "api"}
+
+    @property
+    def runs_monitor_workers(self) -> bool:
+        return self.monitor_mode in {"all", "worker"}
 
 
 @lru_cache

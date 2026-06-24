@@ -33,11 +33,18 @@ async def lifespan(_app: FastAPI):
     runtime_error = check_monitor_runtime()
     if runtime_error:
         logger.error("监控功能不可用: %s", runtime_error)
-    manager = get_monitor_manager()
-    manager.start()
-    logger.info("Web 服务已启动")
+    manager = None
+    if settings.runs_monitor_workers:
+        if runtime_error:
+            logger.error("监控 Worker 未启动: %s", runtime_error)
+        else:
+            manager = get_monitor_manager()
+            manager.start()
+            logger.info("监控 Worker 已启动 (mode=%s)", settings.monitor_mode)
+    logger.info("Web 服务已启动 (mode=%s)", settings.monitor_mode)
     yield
-    manager.stop()
+    if manager is not None:
+        manager.stop()
 
 
 app = FastAPI(title="TikTok 关注监听", lifespan=lifespan)
@@ -57,11 +64,15 @@ app.include_router(admin_router)
 
 @app.get("/api/health")
 def health():
+    settings = get_settings()
     runtime_error = check_monitor_runtime()
-    payload = {"status": "ok"}
+    payload = {"status": "ok", "mode": settings.monitor_mode}
     if runtime_error:
         payload["monitor"] = "unavailable"
         payload["monitor_error"] = runtime_error
+    elif settings.monitor_mode == "api":
+        payload["monitor"] = "external"
+        payload["monitor_note"] = "监控运行在独立 Worker 进程"
     else:
         payload["monitor"] = "ok"
     return payload

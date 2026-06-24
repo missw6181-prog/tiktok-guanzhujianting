@@ -16,6 +16,7 @@ from app.database import SessionLocal
 from app.models import FollowEvent as FollowEventModel
 from app.models import JoinEvent as JoinEventModel
 from app.models import MonitorTask
+from app.monitor.client_cleanup import close_event_loop, dispose_tiktok_client_sync
 from app.monitor.task_status import (
     STATUS_CONNECTING,
     STATUS_ERROR,
@@ -276,6 +277,22 @@ class TaskWorker(threading.Thread):
                     return
                 continue
 
+            from app.monitor.live_check import check_streamer_is_live_lightweight
+
+            if not check_streamer_is_live_lightweight(runtime, self.settings):
+                logger.info(
+                    "[task %s] @%s 未开播（轻量检测）",
+                    self.task_id,
+                    runtime.streamer_unique_id,
+                )
+                update_task_status(self.task_id, STATUS_OFFLINE)
+                if self.stop_event.is_set():
+                    return
+                update_task_status(self.task_id, STATUS_RETRYING, None)
+                if self.stop_event.wait(self.settings.reconnect_delay_seconds):
+                    return
+                continue
+
             update_task_status(self.task_id, STATUS_CONNECTING)
             try:
                 self._run_session(runtime)
@@ -314,6 +331,7 @@ class TaskWorker(threading.Thread):
 
         tl = _tiktoklive()
         TikTokLiveClient = tl["TikTokLiveClient"]
+        UserOfflineError = tl["UserOfflineError"]
 
         proxy = httpx.Proxy(self.settings.proxy_url) if self.settings.proxy_url else None
         client = TikTokLiveClient(
@@ -340,25 +358,24 @@ class TaskWorker(threading.Thread):
         self._register_handlers(client, runtime, follow_counter, join_limiter, loop, tl)
 
         room_id = get_room_id(runtime.streamer_unique_id)
-        UserOfflineError = tl["UserOfflineError"]
-
-        async def preflight() -> bool:
-            return await confirm_streamer_is_live(
-                client,
-                runtime.streamer_unique_id,
-                room_id,
-            )
-
-        if not loop.run_until_complete(preflight()):
-            clear_room_id(runtime.streamer_unique_id)
-            update_task_status(runtime.task_id, STATUS_OFFLINE)
-            raise UserOfflineError(f"@{runtime.streamer_unique_id} 未开播")
-
-        kwargs: dict = {"fetch_live_check": True}
-        if room_id is not None:
-            kwargs["room_id"] = room_id
 
         try:
+            async def preflight() -> bool:
+                return await confirm_streamer_is_live(
+                    client,
+                    runtime.streamer_unique_id,
+                    room_id,
+                )
+
+            if not loop.run_until_complete(preflight()):
+                clear_room_id(runtime.streamer_unique_id)
+                update_task_status(runtime.task_id, STATUS_OFFLINE)
+                raise UserOfflineError(f"@{runtime.streamer_unique_id} 未开播")
+
+            kwargs: dict = {"fetch_live_check": True}
+            if room_id is not None:
+                kwargs["room_id"] = room_id
+
             client.run(**kwargs)
         except Exception as exc:
             if _is_offline_error(exc):
@@ -371,7 +388,8 @@ class TaskWorker(threading.Thread):
                 clear_room_id(runtime.streamer_unique_id)
             raise
         finally:
-            loop.close()
+            dispose_tiktok_client_sync(client, loop)
+            close_event_loop(loop)
 
     def _register_handlers(
         self,

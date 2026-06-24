@@ -72,18 +72,33 @@ cat > "$RELEASE_DIR/start.sh" <<'EOF'
 set -euo pipefail
 cd "$(dirname "$0")"
 export SERVE_STATIC=true
+ulimit -n 65535 2>/dev/null || true
 if [[ ! -f .env ]]; then
   echo "请先复制 .env.example 为 .env 并修改 JWT_SECRET 等配置"
   exit 1
 fi
-# PyInstaller 以可执行文件所在目录为根，需把 .env 和前端目录链到二进制目录
 BIN_DIR="./follow-monitor"
 ln -sfn "$(pwd)/.env" "$BIN_DIR/.env"
 ln -sfn "$(pwd)/frontend-user" "$BIN_DIR/frontend-user" 2>/dev/null || true
 ln -sfn "$(pwd)/frontend-admin" "$BIN_DIR/frontend-admin" 2>/dev/null || true
-exec "$BIN_DIR/follow-monitor" run --host 0.0.0.0 --port "${PORT:-8000}"
+exec "$BIN_DIR/follow-monitor" run --api-only --host 0.0.0.0 --port "${PORT:-8000}"
 EOF
 chmod +x "$RELEASE_DIR/start.sh"
+
+cat > "$RELEASE_DIR/start-worker.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")"
+ulimit -n 65535 2>/dev/null || true
+if [[ ! -f .env ]]; then
+  echo "请先复制 .env.example 为 .env"
+  exit 1
+fi
+BIN_DIR="./follow-monitor"
+ln -sfn "$(pwd)/.env" "$BIN_DIR/.env"
+exec "$BIN_DIR/follow-monitor" worker
+EOF
+chmod +x "$RELEASE_DIR/start-worker.sh"
 
 if [[ "$SKIP_BACKEND" == true ]]; then
   echo
