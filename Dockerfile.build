@@ -1,0 +1,16 @@
+# 在 Linux amd64 容器内编译（Mac ARM 需 --platform linux/amd64，否则服务器 x86_64 无法运行）
+FROM --platform=linux/amd64 python:3.12-bookworm
+
+WORKDIR /src
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends gcc g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt requirements-build.txt ./
+RUN pip install --no-cache-dir -r requirements.txt -r requirements-build.txt
+
+COPY app ./app
+COPY join_rate_limiter.py room_cache.py telegram_notifier.py run_server.py follow_monitor.spec ./
+
+RUN pyinstaller --clean --noconfirm follow_monitor.spec

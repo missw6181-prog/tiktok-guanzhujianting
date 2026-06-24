@@ -1,10 +1,11 @@
 import json
 from pathlib import Path
+from typing import Dict, Optional
 
 CACHE_PATH = Path(__file__).resolve().parent / "data" / "room_cache.json"
 
 
-def _load_all() -> dict[str, int]:
+def _load_all() -> Dict[str, int]:
     if not CACHE_PATH.exists():
         return {}
     try:
@@ -14,7 +15,7 @@ def _load_all() -> dict[str, int]:
         return {}
 
 
-def get_room_id(streamer_unique_id: str) -> int | None:
+def get_room_id(streamer_unique_id: str) -> Optional[int]:
     return _load_all().get(streamer_unique_id.lstrip("@"))
 
 

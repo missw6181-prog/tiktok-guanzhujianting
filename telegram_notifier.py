@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from typing import Optional, Tuple
 
 import httpx
 
@@ -43,6 +44,11 @@ def build_follow_message(
     )
 
 
+def build_live_started_message(streamer_unique_id: str) -> str:
+    uid = streamer_unique_id.lstrip("@")
+    return f"目标主播 @{uid} 已经开播，开始监听新关注。"
+
+
 def build_join_message(user_unique_id: str, nickname: str) -> str:
     user = user_unique_id.lstrip("@")
     display_name = nickname or user
@@ -72,9 +78,9 @@ async def send_telegram_message(
     bot_token: str,
     chat_id: str,
     text: str,
-    proxy_url: str | None = None,
+    proxy_url: Optional[str] = None,
     env_chat_key: str = "TELEGRAM_CHAT_ID",
-) -> tuple[bool, str | None]:
+) -> Tuple[bool, Optional[str]]:
     """返回 (是否成功, 若群组升级则返回新的 chat_id)"""
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     payload = {"chat_id": chat_id, "text": text, "disable_web_page_preview": False}
@@ -83,7 +89,7 @@ async def send_telegram_message(
     if proxy_url:
         client_kwargs["proxy"] = proxy_url
 
-    migrated_chat_id: str | None = None
+    migrated_chat_id: Optional[str] = None
 
     for attempt in range(_MAX_RETRIES):
         try:
@@ -123,7 +129,7 @@ async def notify_message_async(
     bot_token: str,
     chat_id: str,
     text: str,
-    proxy_url: str | None = None,
+    proxy_url: Optional[str] = None,
     env_chat_key: str = "TELEGRAM_CHAT_ID",
     on_chat_id_migrated=None,
 ) -> None:
@@ -141,6 +147,31 @@ async def notify_message_async(
         logger.exception("Telegram 推送异常")
 
 
+async def notify_live_started_async(
+    *,
+    bot_token: str,
+    chat_id: str,
+    streamer_unique_id: str,
+    proxy_url: Optional[str] = None,
+    on_chat_id_migrated=None,
+) -> bool:
+    text = build_live_started_message(streamer_unique_id)
+    try:
+        ok, new_chat_id = await send_telegram_message(
+            bot_token=bot_token,
+            chat_id=chat_id,
+            text=text,
+            proxy_url=proxy_url,
+            env_chat_key="TELEGRAM_FOLLOW_CHAT_ID",
+        )
+        if ok and new_chat_id and on_chat_id_migrated:
+            on_chat_id_migrated(new_chat_id)
+        return ok
+    except Exception:
+        logger.exception("Telegram 开播通知推送异常")
+        return False
+
+
 async def notify_follow_async(
     *,
     bot_token: str,
@@ -150,7 +181,7 @@ async def notify_follow_async(
     follower_unique_id: str,
     streamer_nickname: str,
     streamer_unique_id: str,
-    proxy_url: str | None = None,
+    proxy_url: Optional[str] = None,
     on_chat_id_migrated=None,
 ) -> bool:
     text = build_follow_message(
@@ -182,7 +213,7 @@ async def notify_join_async(
     chat_id: str,
     user_unique_id: str,
     nickname: str,
-    proxy_url: str | None = None,
+    proxy_url: Optional[str] = None,
     on_chat_id_migrated=None,
 ) -> bool:
     text = build_join_message(user_unique_id, nickname)

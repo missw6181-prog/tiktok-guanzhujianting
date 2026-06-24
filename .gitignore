@@ -1,8 +1,64 @@
+# ========== Python ==========
 .venv/
+venv/
 __pycache__/
 *.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# ========== Node / 前端构建产物 ==========
+**/node_modules/
+frontend-user/dist/
+frontend-admin/dist/
+
+# ========== 环境与密钥（勿提交） ==========
 .env
-data/*.db
-data/*.json
-data/follows.db
-*.db
+.env.*
+!.env.example
+release/.env
+
+# ========== 本地运行时数据 ==========
+data/*
+!data/.gitkeep
+
+# ========== 发布包 / 二进制 / 数据库备份 ==========
+release/follow-monitor/
+release/*.tar.gz
+release/*.sql
+
+# ========== 本地工具链 ==========
+.tools/
+
+# ========== 日志与进程文件 ==========
+*.log
+*.pid
+*.sock
+
+# ========== 操作系统 ==========
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+desktop.ini
+
+# ========== IDE / 编辑器 ==========
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ========== 归档与临时文件 ==========
+其他项目/
+*.tmp
+*.bak
